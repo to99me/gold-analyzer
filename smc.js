@@ -140,5 +140,5 @@
   if($("minorCount"))$("minorCount").textContent="--";
   const c=$("swingCanvas");if(c){const x=c.getContext("2d");x.clearRect(0,0,c.width,c.height);}
  };
- window.addEventListener("resize",()=>{if(lastPoints.length)const r=detect(lastPoints);draw(lastPoints,r,getFibonacci(r.major));});
+ window.addEventListener("resize",()=>{if(lastPoints.length){const r=detect(lastPoints);draw(lastPoints,r,getFibonacci(r.major));}});
 })();
