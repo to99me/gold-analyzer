@@ -64,6 +64,21 @@
   }
   return null;
  }
+ function formatCandleTime(value) {
+  if(value===undefined || value===null || value==="") return "時刻データなし";
+  let n=Number(value), date;
+  if(Number.isFinite(n)) date=new Date(n < 1e12 ? n*1000 : n);
+  else date=new Date(value);
+  if(Number.isNaN(date.getTime())) return String(value);
+  return new Intl.DateTimeFormat("ja-JP",{timeZone:"Asia/Tokyo",year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit"}).format(date);
+ }
+ function auditAnchor(p, label, points) {
+  const c=points[p.index]||{};
+  const val=k=>Number.isFinite(Number(c[k]))?Number(c[k]).toFixed(2):"--";
+  return label+"："+formatCandleTime(c.t ?? c.time ?? c.timestamp)+
+   " ／ O "+val("o")+" H "+val("h")+" L "+val("l")+" C "+val("c")+
+   " ／ "+p.side.toUpperCase()+"採用値 "+p.price.toFixed(2);
+ }
  function draw(points, result, fib) {
   const canvas=$("swingCanvas"); if(!canvas) return;
   const rect=canvas.getBoundingClientRect(), dpr=window.devicePixelRatio||1;
@@ -130,6 +145,9 @@
   if($("fibDirection")) $("fibDirection").textContent=fib?fib.direction:"確定スウィング待ち";
   if($("fibAnchor")) $("fibAnchor").textContent=fib?
    "起点 "+fib.start.price.toFixed(2)+" → 終点 "+fib.end.price.toFixed(2):"--";
+  if($("fibAudit")) $("fibAudit").textContent=fib?
+   "計算元：XAUS API（15分足）\n"+auditAnchor(fib.start,"起点",points)+"\n"+auditAnchor(fib.end,"終点",points):
+   "Majorの高値・安値が交互に確定すると検証情報を表示します";
   if($("fibLevels")) $("fibLevels").textContent=fib?
    fib.levels.map(x=>(x.ratio*100).toFixed(1)+"%："+x.price.toFixed(2)).join("　／　"):"Majorの高値・安値が交互に確定すると表示します";
   draw(points,result,fib);
