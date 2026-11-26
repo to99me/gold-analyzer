@@ -50,7 +50,21 @@
   ].filter(Boolean);
   return {major,minor,candidates};
  }
- function draw(points, result) {
+ function getFibonacci(major) {
+  for(let i=major.length-1;i>0;i--) {
+   const end=major[i], start=major[i-1];
+   if(start.side===end.side || end.index<=start.index) continue;
+   const span=Math.abs(end.price-start.price);
+   if(!Number.isFinite(span) || span<=0) continue;
+   const ratios=[0,.236,.382,.5,.618,.786,1];
+   return {
+    start,end,direction:end.side==="high"?"上昇波の押し目":"下降波の戻り",
+    levels:ratios.map(r=>({ratio:r,price:end.price+(start.price-end.price)*r}))
+   };
+  }
+  return null;
+ }
+ function draw(points, result, fib) {
   const canvas=$("swingCanvas"); if(!canvas) return;
   const rect=canvas.getBoundingClientRect(), dpr=window.devicePixelRatio||1;
   const w=Math.max(320,rect.width), h=300;
@@ -64,6 +78,21 @@
   const pad={l:10,r:62,t:18,b:22}, pw=w-pad.l-pad.r, ph=h-pad.t-pad.b;
   const y=v=>pad.t+(max-v)/(max-min)*ph;
   const step=pw/shown.length, body=Math.max(2,Math.min(8,step*.58));
+  if(fib) {
+   ctx.save();ctx.font="10px sans-serif";ctx.textAlign="left";
+   fib.levels.forEach(level=>{
+    if(level.price<min || level.price>max) return;
+    const yy=y(level.price);
+    ctx.strokeStyle=level.ratio===0.618?"#f3c65e":"rgba(157,181,210,.48)";
+    ctx.lineWidth=level.ratio===0.618?1.5:1;
+    ctx.setLineDash(level.ratio===0.618?[]:[4,4]);
+    ctx.beginPath();ctx.moveTo(pad.l,yy);ctx.lineTo(w-pad.r,yy);ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle=level.ratio===0.618?"#f3c65e":"#b7c5d8";
+    ctx.fillText((level.ratio*100).toFixed(1)+"%",pad.l+3,yy-3);
+   });
+   ctx.restore();
+  }
   ctx.strokeStyle="#26364c";ctx.lineWidth=1;
   for(let k=0;k<=4;k++){const yy=pad.t+ph*k/4;ctx.beginPath();ctx.moveTo(pad.l,yy);ctx.lineTo(w-pad.r,yy);ctx.stroke();
    ctx.fillStyle="#9eabbc";ctx.font="10px sans-serif";ctx.fillText((max-(max-min)*k/4).toFixed(1),w-pad.r+5,yy+3);}
@@ -94,10 +123,16 @@
   if(points.length<12){window.clearSwingStructure("スイング検出に必要なデータが不足しています");return;}
   lastPoints=points;
   const result=detect(points);
+  const fib=getFibonacci(result.major);
   $("majorCount").textContent=result.major.length+" 件";
   $("minorCount").textContent=result.minor.length+" 件";
   $("swingStatus").textContent="検出完了 · "+points.length+"本";
-  draw(points,result);
+  if($("fibDirection")) $("fibDirection").textContent=fib?fib.direction:"確定スウィング待ち";
+  if($("fibAnchor")) $("fibAnchor").textContent=fib?
+   "起点 "+fib.start.price.toFixed(2)+" → 終点 "+fib.end.price.toFixed(2):"--";
+  if($("fibLevels")) $("fibLevels").textContent=fib?
+   fib.levels.map(x=>(x.ratio*100).toFixed(1)+"%："+x.price.toFixed(2)).join("　／　"):"Majorの高値・安値が交互に確定すると表示します";
+  draw(points,result,fib);
  };
  window.clearSwingStructure = function(message) {
   if($("swingStatus"))$("swingStatus").textContent=message;
@@ -105,5 +140,5 @@
   if($("minorCount"))$("minorCount").textContent="--";
   const c=$("swingCanvas");if(c){const x=c.getContext("2d");x.clearRect(0,0,c.width,c.height);}
  };
- window.addEventListener("resize",()=>{if(lastPoints.length)draw(lastPoints,detect(lastPoints));});
+ window.addEventListener("resize",()=>{if(lastPoints.length)const r=detect(lastPoints);draw(lastPoints,r,getFibonacci(r.major));});
 })();
