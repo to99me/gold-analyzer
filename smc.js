@@ -150,9 +150,11 @@
    const highIndex=points.reduce((best,p,i)=>Number(p.h)>Number(points[best].h)?i:best,0);
    const lowPivot={index:lowIndex,side:"low",price:Number(points[lowIndex].l)};
    const highPivot={index:highIndex,side:"high",price:Number(points[highIndex].h)};
-   $("fibAudit").textContent=fib?
+   const first=points[0], last=points[points.length-1];
+   const dataRange="取得本数："+points.length+"本 ／ 取得期間："+formatCandleTime(first.t ?? first.time ?? first.timestamp)+" ～ "+formatCandleTime(last.t ?? last.time ?? last.timestamp)+"\n";
+   $("fibAudit").textContent=dataRange+(fib?
     "計算元：XAUS API（15分足）\n"+auditAnchor(fib.start,"起点",points)+"\n"+auditAnchor(fib.end,"終点",points)+"\n\n取得データ全体の最安値："+auditAnchor(lowPivot,"全体Low",points)+"\n取得データ全体の最高値："+auditAnchor(highPivot,"全体High",points):
-    "Majorの高値・安値が交互に確定すると検証情報を表示します\n取得データ全体の最安値："+auditAnchor(lowPivot,"全体Low",points);
+    "Majorの高値・安値が交互に確定すると検証情報を表示します\n取得データ全体の最安値："+auditAnchor(lowPivot,"全体Low",points));
   }
   if($("fibLevels")) $("fibLevels").textContent=fib?
    fib.levels.map(x=>(x.ratio*100).toFixed(1)+"%："+x.price.toFixed(2)).join("　／　"):"Majorの高値・安値が交互に確定すると表示します";
