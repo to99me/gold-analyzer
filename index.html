@@ -296,7 +296,7 @@ async function loadAnalysis(){
 async function loadMultiTimeframe(){
  const fetchCandles=async interval=>{
   const url=`https://xaus.com/api/v1/chart?symbol=xau&range=1mo&interval=${interval}`;
-  const r=await fetch(url);
+  const r=await fetch(url,{cache:"no-store"});
   if(!r.ok)throw Error(interval+"足データ取得エラー");
   const d=await r.json();
   const points=(d.points||[]).filter(x=>Number.isFinite(Number(x.h))&&Number.isFinite(Number(x.l))&&Number.isFinite(Number(x.c)));
@@ -320,6 +320,7 @@ async function loadMultiTimeframe(){
   if(typeof renderEntrySetup==="function")renderEntrySetup(hourly,fifteen);
  }catch(e){
   $("mtfConclusion").textContent="マルチタイムフレーム分析を取得できません："+e.message;
+  if($("candleFreshness"))$("candleFreshness").textContent="ローソク足の更新時刻を確認できません："+e.message;
  }
 }
 
