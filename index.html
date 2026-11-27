@@ -58,6 +58,16 @@ footer{color:#8492a5;font-size:11px;line-height:1.7;padding:10px}
 <div class="muted">チャート提供：TradingView</div>
 </section>
 
+<section class="panel" id="mtfPanel">
+ <h2>MULTI-TIMEFRAME STRUCTURE</h2>
+ <div class="metric" id="mtfConclusion">1時間足・15分足の構造を分析します</div>
+ <div class="grid" style="margin-top:10px">
+  <div class="metric"><div class="muted">1時間足 · MAJOR SWING</div><div id="hourlyStructure" style="white-space:pre-line;line-height:1.9;margin-top:7px">データ取得待ち</div></div>
+  <div class="metric"><div class="muted">15分足 · MINOR SWING</div><div id="fifteenStructure" style="white-space:pre-line;line-height:1.9;margin-top:7px">データ取得待ち</div></div>
+ </div>
+ <div class="muted" style="margin-top:8px">※確定した高値・安値から構造を判定します。押し安値・戻り高値は直近の確定スイングであり、売買指示ではありません。</div>
+</section>
+
 <section class="panel" id="smcPanel">
  <div class="row"><h2>SMC SWING STRUCTURE · 15分足</h2><span class="muted" id="swingStatus">検出待ち</span></div>
  <div class="grid">
@@ -247,9 +257,27 @@ async function loadAnalysis(){
  }
 }
 
+
+async function loadMultiTimeframe(){
+ const fetchCandles=async interval=>{
+  const url=`https://xaus.com/api/v1/chart?symbol=xau&range=1mo&interval=${interval}`;
+  const r=await fetch(url);
+  if(!r.ok)throw Error(interval+"足データ取得エラー");
+  const d=await r.json();
+  return (d.points||[]).filter(x=>Number.isFinite(Number(x.h))&&Number.isFinite(Number(x.l))&&Number.isFinite(Number(x.c)));
+ };
+ try{
+  const [hourly,fifteen]=await Promise.all([fetchCandles("60m"),fetchCandles("15m")]);
+  if(typeof renderMultiTimeframe==="function")renderMultiTimeframe(hourly,fifteen);
+ }catch(e){
+  $("mtfConclusion").textContent="マルチタイムフレーム分析を取得できません："+e.message;
+ }
+}
+
 async function updateAll(){
  await loadPrice();
  await loadAnalysis();
+ await loadMultiTimeframe();
 }
 $("timeframe").addEventListener("change",()=>{
  loadChart();loadAnalysis();
@@ -259,6 +287,7 @@ loadChart();
 updateAll();
 setInterval(loadPrice,60000);
 setInterval(loadAnalysis,300000);
+setInterval(loadMultiTimeframe,300000);
 </script>
 </body>
 </html>
