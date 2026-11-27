@@ -42,6 +42,7 @@ footer{color:#8492a5;font-size:11px;line-height:1.7;padding:10px}
 </div>
 <div class="price" id="price">取得中...</div>
 <div class="muted" id="updated">価格データを取得しています</div>
+<div class="muted" id="priceFreshness" style="margin-top:6px">価格データ時刻を確認中</div>
 </section>
 
 <section class="panel">
@@ -61,6 +62,7 @@ footer{color:#8492a5;font-size:11px;line-height:1.7;padding:10px}
 <section class="panel" id="mtfPanel">
  <h2>MULTI-TIMEFRAME STRUCTURE</h2>
  <div class="metric" id="mtfConclusion">1時間足・15分足の構造を分析します</div>
+ <div class="metric" id="candleFreshness" style="margin-top:8px;white-space:pre-line;line-height:1.8">ローソク足データの鮮度を確認中</div>
  <div class="grid" style="margin-top:10px">
   <div class="metric"><div class="muted">1時間足 · MAJOR SWING</div><div id="hourlyStructure" style="white-space:pre-line;line-height:1.9;margin-top:7px">データ取得待ち</div></div>
   <div class="metric"><div class="muted">15分足 · MINOR SWING</div><div id="fifteenStructure" style="white-space:pre-line;line-height:1.9;margin-top:7px">データ取得待ち</div></div>
@@ -161,6 +163,24 @@ function loadChart(){
  $("chart").appendChild(box);
 }
 
+function parseMarketTime(v){
+ if(v===undefined||v===null||v==="")return null;
+ if(typeof v==="number"||/^\\d+(\\.\\d+)?$/.test(String(v))){
+  const n=Number(v);return new Date(n<1e12?n*1000:n);
+ }
+ const d=new Date(v);return Number.isNaN(d.getTime())?null:d;
+}
+function ageLabel(date){
+ if(!date)return "時刻不明";
+ const sec=Math.max(0,Math.floor((Date.now()-date.getTime())/1000));
+ if(sec<60)return sec+"秒前";
+ if(sec<3600)return Math.floor(sec/60)+"分前";
+ if(sec<86400)return Math.floor(sec/3600)+"時間前";
+ return Math.floor(sec/86400)+"日前";
+}
+function displayTime(date){
+ return date?new Intl.DateTimeFormat("ja-JP",{timeZone:"Asia/Tokyo",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit"}).format(date):"時刻不明";
+}
 async function loadPrice(){
  try{
   const r=await fetch("https://xaus.com/api/v1/spot?compact=1",{cache:"no-store"});
@@ -172,7 +192,15 @@ async function loadPrice(){
   const state=d.data_state?.status||"unknown";
   $("status").textContent=state==="fresh"?"最新データ":state==="stale"?"古いデータ":"状態不明";
   $("status").className=state==="fresh"?"green":"yellow";
-  $("updated").textContent="更新："+(d.updated_at||"時刻不明");
+  $("updated").textContent="API応答時刻："+(d.updated_at||"時刻不明");
+  const asOf=parseMarketTime(d.price_as_of||d.data_state?.as_of||d.updated_at);
+  const age=d.data_state?.age_seconds;
+  const freshness=$("priceFreshness");
+  if(freshness){
+   const ageText=Number.isFinite(Number(age))?"データ年齢："+Math.floor(Number(age)/60)+"分":"経過時間："+ageLabel(asOf);
+   freshness.textContent="価格の基準時刻："+displayTime(asOf)+" ／ "+ageText+" ／ 状態："+state;
+   freshness.style.color=state==="fresh"?"#55d69a":state==="stale"?"#ff7777":"#f3c65e";
+  }
   if(state==="stale"||state==="unavailable"){
    $("status").textContent="データ要確認";
   }
@@ -271,10 +299,23 @@ async function loadMultiTimeframe(){
   const r=await fetch(url);
   if(!r.ok)throw Error(interval+"足データ取得エラー");
   const d=await r.json();
-  return (d.points||[]).filter(x=>Number.isFinite(Number(x.h))&&Number.isFinite(Number(x.l))&&Number.isFinite(Number(x.c)));
+  const points=(d.points||[]).filter(x=>Number.isFinite(Number(x.h))&&Number.isFinite(Number(x.l))&&Number.isFinite(Number(x.c)));
+  return points;
  };
  try{
   const [hourly,fifteen]=await Promise.all([fetchCandles("60m"),fetchCandles("15m")]);
+  const candleState=$("candleFreshness");
+  if(candleState){
+   const h=hourly[hourly.length-1],m=fifteen[fifteen.length-1];
+   const ht=parseMarketTime(h?.t??h?.time??h?.timestamp),mt=parseMarketTime(m?.t??m?.time??m?.timestamp);
+   const hAge=ht?Math.floor((Date.now()-ht.getTime())/60000):null;
+   const mAge=mt?Math.floor((Date.now()-mt.getTime())/60000):null;
+   const hLabel=hAge===null?"時刻不明":hAge<0?"時刻異常":hAge<60?hAge+"分前":Math.floor(hAge/60)+"時間前";
+   const mLabel=mAge===null?"時刻不明":mAge<0?"時刻異常":mAge<60?mAge+"分前":Math.floor(mAge/60)+"時間前";
+   const hBad=hAge===null||hAge<0||hAge>180,mBad=mAge===null||mAge<0||mAge>90;
+   candleState.textContent="1時間足 最新ローソク："+displayTime(ht)+"（"+hLabel+"）"+(hBad?" ⚠":" ✓")+"\\n15分足 最新ローソク："+displayTime(mt)+"（"+mLabel+"）"+(mBad?" ⚠":" ✓")+"\\n※足の時刻は価格の更新時刻ではありません。市場休場時は古くなる場合があります。";
+   candleState.style.borderLeft="3px solid "+(hBad||mBad?"#f3c65e":"#55d69a");
+  }
   if(typeof renderMultiTimeframe==="function")renderMultiTimeframe(hourly,fifteen);
   if(typeof renderEntrySetup==="function")renderEntrySetup(hourly,fifteen);
  }catch(e){
