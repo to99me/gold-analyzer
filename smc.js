@@ -191,6 +191,76 @@
    state.textContent=msg;
   }
  };
+
+ function atrValue(points, period=14) {
+  if(points.length<period+1)return null;
+  const ranges=[];
+  for(let i=1;i<points.length;i++){
+   const p=points[i], prev=points[i-1];
+   ranges.push(Math.max(Number(p.h)-Number(p.l),Math.abs(Number(p.h)-Number(prev.c)),Math.abs(Number(p.l)-Number(prev.c))));
+  }
+  return ranges.slice(-period).reduce((a,b)=>a+b,0)/period;
+ }
+ function findRetestSetup(raw, hourlyRaw) {
+  const points=(raw||[]).filter(valid);
+  if(points.length<40)return {status:"データ不足",detail:"15分足データが不足しています"};
+  const atr=atrValue(points);
+  if(!atr)return {status:"データ不足",detail:"ATRを計算できません"};
+  const pivL=findPivots(points,"low",MINOR,MINOR);
+  const pivH=findPivots(points,"high",MINOR,MINOR);
+  const events=[];
+  for(const p of pivL){
+   for(let i=p.index+1;i<points.length;i++){
+    if(Number(points[i].c)<p.price-atr*0.03){events.push({side:"short",level:p.price,breakIndex:i,pivot:p});break;}
+   }
+  }
+  for(const p of pivH){
+   for(let i=p.index+1;i<points.length;i++){
+    if(Number(points[i].c)>p.price+atr*0.03){events.push({side:"long",level:p.price,breakIndex:i,pivot:p});break;}
+   }
+  }
+  if(!events.length)return {status:"ブレイク待ち",detail:"直近スイング高値・安値の明確な終値ブレイクを待っています"};
+  events.sort((a,b)=>b.breakIndex-a.breakIndex);
+  const e=events[0], age=points.length-1-e.breakIndex;
+  if(age>48)return {status:"ブレイク待ち",detail:"直近のブレイクは古いため、新しいスイングを監視します"};
+  const tol=atr*0.18;
+  let retest=null, rejection=null;
+  for(let i=e.breakIndex+1;i<points.length;i++){
+   const p=points[i],o=Number(p.o),c=Number(p.c),hi=Number(p.h),lo=Number(p.l);
+   if(e.side==="short"){
+    if(c>e.level+atr*0.25)return {status:"ブレイク失敗・見送り",detail:"価格がブレイク水準を上回って定着。次の構造を待ちます"};
+    if(hi>=e.level-tol){retest={index:i,price:hi};const body=Math.abs(c-o),wick=hi-Math.max(o,c);
+     if(c<o&&c<e.level&&wick>=body*0.7)rejection={index:i,price:hi};}
+   }else{
+    if(c<e.level-atr*0.25)return {status:"ブレイク失敗・見送り",detail:"価格がブレイク水準を下回って定着。次の構造を待ちます"};
+    if(lo<=e.level+tol){retest={index:i,price:lo};const body=Math.abs(c-o),wick=Math.min(o,c)-lo;
+     if(c>o&&c>e.level&&wick>=body*0.7)rejection={index:i,price:lo};}
+   }
+  }
+  const side=e.side, aligned=(hourlyRaw&&structureSummary(hourlyRaw,MAJOR,MAJOR));
+  const trendAligned=aligned&&aligned.ready&&((side==="short"&&aligned.trend==="下降")||(side==="long"&&aligned.trend==="上昇"));
+  const price=Number(points[points.length-1].c);
+  if(!retest)return {status:"リテスト待ち",side,level:e.level,detail:(side==="short"?"安値":"高値")+"ブレイクを確認。ブレイク水準への戻りを待っています",trendAligned};
+  if(!rejection)return {status:"反転確認待ち",side,level:e.level,detail:"リテスト接近。反対方向へのローソク足確定を待っています",trendAligned};
+  const bar=points[rejection.index],stop=side==="short"?rejection.price+atr*0.15:rejection.price-atr*0.15;
+  const risk=Math.abs(price-stop);
+  const tp1=side==="short"?price-risk:price+risk, tp2=side==="short"?price-risk*2:price+risk*2;
+  if(!trendAligned)return {status:"時間足不一致・見送り",side,level:e.level,detail:"15分足では反転確認。ただし1時間足の方向と一致していません",trendAligned:false};
+  return {status:side==="short"?"ショート候補":"ロング候補",side,level:e.level,detail:"リテスト後の反転ローソク足を確認。確定足ベースの候補です",trendAligned:true,stop,tp1,tp2,entry:price,rr:"1:1 / 1:2",time:formatCandleTime(bar.t??bar.time??bar.timestamp)};
+ }
+ window.renderEntrySetup=function(hourlyRaw,fifteenRaw){
+  const el=$("entrySetup");if(!el)return;
+  const x=findRetestSetup(fifteenRaw,hourlyRaw);
+  const colors={"ロング候補":"#55d69a","ショート候補":"#ff7777"};
+  el.style.borderLeft="3px solid "+(colors[x.status]||"#f3c65e");
+  const lines=["判定："+x.status,x.detail||""];
+  if(x.level!==undefined)lines.push("ブレイク基準："+x.level.toFixed(2));
+  if(x.trendAligned!==undefined)lines.push("1時間足方向："+(x.trendAligned?"一致":"不一致"));
+  if(x.entry!==undefined)lines.push("現在値："+x.entry.toFixed(2),"損切り候補："+x.stop.toFixed(2),"利確候補 TP1："+x.tp1.toFixed(2)+" ／ TP2："+x.tp2.toFixed(2),"目安RR："+x.rr,"確認足："+x.time);
+  lines.push("※機械的な構造判定です。実際の約定価格・スプレッド・急変動を考慮した注文指示ではありません。");
+  el.textContent=lines.join("\n");
+ };
+
  window.renderSwingStructure = function(raw) {
   const points=(raw||[]).filter(valid);
   if(points.length<12){window.clearSwingStructure("スイング検出に必要なデータが不足しています");return;}
