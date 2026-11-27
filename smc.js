@@ -137,12 +137,33 @@
  function latestTwo(pivots, side) {
   return pivots.filter(p=>p.side===side).slice(-2);
  }
+ function structuredSwings(points,left,right) {
+  const raw=[...findPivots(points,"high",left,right),...findPivots(points,"low",left,right)]
+   .sort((a,b)=>a.index-b.index);
+  const alternating=[];
+  for(const p of raw){
+   const last=alternating[alternating.length-1];
+   if(!last||last.side!==p.side){alternating.push(p);continue;}
+   if((p.side==="high"&&p.price>last.price)||(p.side==="low"&&p.price<last.price))alternating[alternating.length-1]=p;
+  }
+  const atr=atrValue(points,14)||0;
+  const minMove=atr*(left>=5?0.65:0.45);
+  const filtered=[];
+  for(const p of alternating){
+   const last=filtered[filtered.length-1];
+   if(!last){filtered.push(p);continue;}
+   if(last.side===p.side)continue;
+   if(Math.abs(p.price-last.price)>=minMove)filtered.push(p);
+  }
+  return filtered;
+ }
  function structureSummary(raw, left, right) {
   const points=(raw||[]).filter(valid);
   if(points.length<Math.max(12,left+right+3)) return {ready:false};
-  const highs=findPivots(points,"high",left,right);
-  const lows=findPivots(points,"low",left,right);
-  const h=latestTwo(highs,"high"), l=latestTwo(lows,"low");
+  const sequence=structuredSwings(points,left,right);
+  const highs=sequence.filter(p=>p.side==="high");
+  const lows=sequence.filter(p=>p.side==="low");
+  const h=highs.slice(-2), l=lows.slice(-2);
   let trend="判定保留", detail="高値・安値の確定待ち";
   if(h.length===2 && l.length===2) {
    const hh=h[1].price>h[0].price, hl=l[1].price>l[0].price;
@@ -157,7 +178,7 @@
    previousHigh:h.length===2?h[0]:null,previousLow:l.length===2?l[0]:null,
    lowTime:low?formatCandleTime(points[low.index].t??points[low.index].time??points[low.index].timestamp):"--",
    highTime:high?formatCandleTime(points[high.index].t??points[high.index].time??points[high.index].timestamp):"--",
-   count:points.length};
+   count:points.length,sequenceCount:sequence.length};
  }
  function writeStructure(prefix, data, label) {
   const el=$(prefix+"Structure");
@@ -168,7 +189,8 @@
    label+"トレンド："+data.trend+"（"+data.detail+"）",
    "現在値："+data.last.toFixed(2),
    "直近押し安値："+(data.low?data.low.price.toFixed(2)+" ／ "+data.lowTime:"未確定"),
-   "直近戻り高値："+(data.high?data.high.price.toFixed(2)+" ／ "+data.highTime:"未確定")
+   "直近戻り高値："+(data.high?data.high.price.toFixed(2)+" ／ "+data.highTime:"未確定"),
+   "前回高値："+(data.previousHigh?data.previousHigh.price.toFixed(2):"--")+" ／ 前回安値："+(data.previousLow?data.previousLow.price.toFixed(2):"--")
   ];
   el.textContent=lines.join("\n");
   el.style.borderLeft="3px solid "+trendColor;
@@ -188,7 +210,7 @@
     else if(h.trend==="下降"&&m.trend==="上昇")msg="1時間足は下降、15分足は戻し中の可能性";
     else msg="方向不一致。エントリーは慎重に";
    }
-   state.textContent=msg;
+   state.textContent=msg+"\n※確定スイングを交互化し、ATRに対して小さすぎる波を除外";
   }
  };
 
