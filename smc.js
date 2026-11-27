@@ -178,6 +178,7 @@
    previousHigh:h.length===2?h[0]:null,previousLow:l.length===2?l[0]:null,
    lowTime:low?formatCandleTime(points[low.index].t??points[low.index].time??points[low.index].timestamp):"--",
    highTime:high?formatCandleTime(points[high.index].t??points[high.index].time??points[high.index].timestamp):"--",
+   lastTime:formatCandleTime(last.t??last.time??last.timestamp),
    count:points.length,sequenceCount:sequence.length};
  }
  function writeStructure(prefix, data, label) {
@@ -187,7 +188,7 @@
   const trendColor=data.trend==="上昇"?"#55d69a":data.trend==="下降"?"#ff7777":"#f3c65e";
   const lines=[
    label+"トレンド："+data.trend+"（"+data.detail+"）",
-   "現在値："+data.last.toFixed(2),
+   "最新足終値："+data.last.toFixed(2)+" ／ 足時刻："+data.lastTime,
    "直近押し安値："+(data.low?data.low.price.toFixed(2)+" ／ "+data.lowTime:"未確定"),
    "直近戻り高値："+(data.high?data.high.price.toFixed(2)+" ／ "+data.highTime:"未確定"),
    "前回高値："+(data.previousHigh?data.previousHigh.price.toFixed(2):"--")+" ／ 前回安値："+(data.previousLow?data.previousLow.price.toFixed(2):"--")
