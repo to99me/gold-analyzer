@@ -68,6 +68,13 @@ footer{color:#8492a5;font-size:11px;line-height:1.7;padding:10px}
  <div class="muted" style="margin-top:8px">※確定した高値・安値から構造を判定します。押し安値・戻り高値は直近の確定スイングであり、売買指示ではありません。</div>
 </section>
 
+
+<section class="panel" id="entryPanel">
+ <h2>ENTRY SETUP · BREAK & RETEST</h2>
+ <div class="metric" id="entrySetup" style="white-space:pre-line;line-height:1.9">分析待ち</div>
+ <div class="muted" style="margin-top:8px">15分足の終値ブレイク後、リテストと反転足を確認。1時間足と方向が一致しない場合は見送り。損切り・利確は参考値です。</div>
+</section>
+
 <section class="panel" id="smcPanel">
  <div class="row"><h2>SMC SWING STRUCTURE · 15分足</h2><span class="muted" id="swingStatus">検出待ち</span></div>
  <div class="grid">
@@ -269,6 +276,7 @@ async function loadMultiTimeframe(){
  try{
   const [hourly,fifteen]=await Promise.all([fetchCandles("60m"),fetchCandles("15m")]);
   if(typeof renderMultiTimeframe==="function")renderMultiTimeframe(hourly,fifteen);
+  if(typeof renderEntrySetup==="function")renderEntrySetup(hourly,fifteen);
  }catch(e){
   $("mtfConclusion").textContent="マルチタイムフレーム分析を取得できません："+e.message;
  }
