@@ -133,6 +133,64 @@
   result.major.forEach(p=>marker(p,"#f3c65e",true,false));
   result.candidates.forEach(p=>marker(p,p.side==="high"?"#f3c65e":"#f3c65e",p.index===points.length-1 && (p===result.candidates[0]||p===result.candidates[1]),true));
  }
+
+ function latestTwo(pivots, side) {
+  return pivots.filter(p=>p.side===side).slice(-2);
+ }
+ function structureSummary(raw, left, right) {
+  const points=(raw||[]).filter(valid);
+  if(points.length<Math.max(12,left+right+3)) return {ready:false};
+  const highs=findPivots(points,"high",left,right);
+  const lows=findPivots(points,"low",left,right);
+  const h=latestTwo(highs,"high"), l=latestTwo(lows,"low");
+  let trend="判定保留", detail="高値・安値の確定待ち";
+  if(h.length===2 && l.length===2) {
+   const hh=h[1].price>h[0].price, hl=l[1].price>l[0].price;
+   const lh=h[1].price<h[0].price, ll=l[1].price<l[0].price;
+   if(hh&&hl){trend="上昇";detail="高値切り上げ・安値切り上げ";}
+   else if(lh&&ll){trend="下降";detail="高値切り下げ・安値切り下げ";}
+   else {trend="レンジ／転換警戒";detail="高値・安値の方向が不一致";}
+  }
+  const last=points[points.length-1];
+  const low=l.length?l[l.length-1]:null, high=h.length?h[h.length-1]:null;
+  return {ready:true,trend,detail,last:Number(last.c),low,high,
+   previousHigh:h.length===2?h[0]:null,previousLow:l.length===2?l[0]:null,
+   lowTime:low?formatCandleTime(points[low.index].t??points[low.index].time??points[low.index].timestamp):"--",
+   highTime:high?formatCandleTime(points[high.index].t??points[high.index].time??points[high.index].timestamp):"--",
+   count:points.length};
+ }
+ function writeStructure(prefix, data, label) {
+  const el=$(prefix+"Structure");
+  if(!el)return;
+  if(!data.ready){el.textContent=label+"：データ不足";return;}
+  const trendColor=data.trend==="上昇"?"#55d69a":data.trend==="下降"?"#ff7777":"#f3c65e";
+  const lines=[
+   label+"トレンド："+data.trend+"（"+data.detail+"）",
+   "現在値："+data.last.toFixed(2),
+   "直近押し安値："+(data.low?data.low.price.toFixed(2)+" ／ "+data.lowTime:"未確定"),
+   "直近戻り高値："+(data.high?data.high.price.toFixed(2)+" ／ "+data.highTime:"未確定")
+  ];
+  el.textContent=lines.join("\n");
+  el.style.borderLeft="3px solid "+trendColor;
+ }
+ window.renderMultiTimeframe = function(hourlyRaw, fifteenRaw) {
+  const h=structureSummary(hourlyRaw,MAJOR,MAJOR);
+  const m=structureSummary(fifteenRaw,MINOR,MINOR);
+  writeStructure("hourly",h,"1時間足");
+  writeStructure("fifteen",m,"15分足");
+  const state=$("mtfConclusion");
+  if(state){
+   let msg="上位足・下位足のデータを確認中";
+   if(h.ready&&m.ready){
+    if(h.trend==="上昇"&&m.trend==="上昇")msg="上昇方向で一致。押し目候補を監視";
+    else if(h.trend==="下降"&&m.trend==="下降")msg="下降方向で一致。戻り売り候補を監視";
+    else if(h.trend==="上昇"&&m.trend==="下降")msg="1時間足は上昇、15分足は調整中の可能性";
+    else if(h.trend==="下降"&&m.trend==="上昇")msg="1時間足は下降、15分足は戻し中の可能性";
+    else msg="方向不一致。エントリーは慎重に";
+   }
+   state.textContent=msg;
+  }
+ };
  window.renderSwingStructure = function(raw) {
   const points=(raw||[]).filter(valid);
   if(points.length<12){window.clearSwingStructure("スイング検出に必要なデータが不足しています");return;}
